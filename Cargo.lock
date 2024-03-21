@@ -9592,6 +9592,7 @@ dependencies = [
  "anyhow",
  "collections",
  "editor",
+ "env_logger",
  "futures 0.3.28",
  "gpui",
  "language",
@@ -9601,6 +9602,7 @@ dependencies = [
  "settings",
  "smol",
  "theme",
+ "ui",
  "util",
 ]
 
