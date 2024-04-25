@@ -458,6 +458,7 @@ pub struct Editor {
     active_inline_completion: Option<Inlay>,
     show_inline_completions: bool,
     inlay_hint_cache: InlayHintCache,
+    next_expanded_hunk_id: usize,
     expanded_hunks: Vec<ExpandedGitHunk>,
     next_inlay_id: usize,
     _subscriptions: Vec<Subscription>,
@@ -486,6 +487,7 @@ pub struct Editor {
 
 #[derive(Debug, Clone)]
 struct ExpandedGitHunk {
+    id: usize,
     block: Option<BlockId>,
     hunk_range: Range<Anchor>,
     diff_base_byte_range: Range<usize>,
@@ -1503,6 +1505,7 @@ impl Editor {
             inline_completion_provider: None,
             active_inline_completion: None,
             inlay_hint_cache: InlayHintCache::new(inlay_hint_settings),
+            next_expanded_hunk_id: 0,
             expanded_hunks: Vec::new(),
             gutter_hovered: false,
             pixel_position_of_newest_cursor: None,
@@ -9244,6 +9247,7 @@ impl Editor {
         self.expanded_hunks.insert(
             block_insert_index,
             ExpandedGitHunk {
+                id: post_inc(&mut self.next_expanded_hunk_id),
                 block,
                 hunk_range: hunk_start..hunk_end,
                 diff_base_version,
