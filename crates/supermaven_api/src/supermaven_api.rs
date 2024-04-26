@@ -9,19 +9,24 @@ use util::http::{AsyncBody, HttpClient, Request as HttpRequest};
 use util::paths::SUPERMAVEN_DIR;
 
 #[derive(Serialize)]
-pub struct GetApiKeyRequest {
+pub struct GetExternalUserRequest {
     pub user_id: String,
 }
 
 #[derive(Serialize)]
-pub struct CreateApiKeyRequest {
+pub struct CreateExternalUserRequest {
     pub user_id: String,
     pub email: String,
 }
 
+#[derive(Serialize)]
+pub struct DeleteExternalUserRequest {
+    pub user_id: String,
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CreateApiKeyResponse {
+pub struct CreateExternalUserResponse {
     pub api_key: String,
 }
 
@@ -46,6 +51,8 @@ pub struct SupermavenAdminApi {
 // {"apiKey":"8ce32ec659adf07910d0dd58eb7c36f1"}
 // $ curl -H 'Authorization: 97420c29-61f1-4b13-8ad0-3c46e5678975' -X GET https://supermaven.com/api/external-user/doesntexist
 // {"message":"User not found"}
+// $ curl -H 'Authorization: 97420c29-61f1-4b13-8ad0-3c46e5678975' -X DELETE https://supermaven.com/api/external-user/rgbkrk-example-3
+// {"message":"User deleted"}
 
 // Download agent - https://supermaven.com/api/download-path?platform=darwin&arch=arm64
 // curl "https://supermaven.com/api/download-path?platform=darwin&arch=arm64"
@@ -78,7 +85,7 @@ impl SupermavenAdminApi {
         }
     }
 
-    pub async fn try_get_user(&self, request: GetApiKeyRequest) -> Result<SupermavenUser> {
+    pub async fn try_get_user(&self, request: GetExternalUserRequest) -> Result<SupermavenUser> {
         let uri = format!("{}external-user/{}", &self.api_url, &request.user_id);
 
         let request = HttpRequest::get(&uri).header("Authorization", self.admin_api_key.clone());
@@ -109,10 +116,10 @@ impl SupermavenAdminApi {
             .with_context(|| format!("Unable to parse Supermaven API Key response"))
     }
 
-    pub async fn try_create_api_key(
+    pub async fn try_create_user(
         &self,
-        request: CreateApiKeyRequest,
-    ) -> Result<CreateApiKeyResponse> {
+        request: CreateExternalUserRequest,
+    ) -> Result<CreateExternalUserResponse> {
         let uri = format!("{}external-user", &self.api_url);
 
         let request = HttpRequest::post(&uri)
@@ -129,12 +136,41 @@ impl SupermavenAdminApi {
         response.body_mut().read_to_end(&mut body).await?;
 
         let body_str = std::str::from_utf8(&body)?;
-        serde_json::from_str::<CreateApiKeyResponse>(body_str)
+        serde_json::from_str::<CreateExternalUserResponse>(body_str)
             .with_context(|| format!("Unable to parse Supermaven API Key response"))
+    }
+
+    pub async fn try_delete_user(&self, request: DeleteExternalUserRequest) -> Result<()> {
+        let uri = format!("{}external-user/{}", &self.api_url, &request.user_id);
+
+        let request = HttpRequest::delete(&uri).header("Authorization", self.admin_api_key.clone());
+
+        let mut response = self
+            .http_client
+            .send(request.body(AsyncBody::default())?)
+            .await
+            .with_context(|| format!("Unable to delete Supermaven User"))?;
+
+        let mut body = Vec::new();
+        response.body_mut().read_to_end(&mut body).await?;
+
+        if response.status().is_client_error() {
+            let error: SupermavenApiError = serde_json::from_slice(&body)?;
+            if error.message == "User not found" {
+                return Ok(());
+            } else {
+                return Err(anyhow!("Supermaven API error: {}", error.message));
+            }
+        } else if response.status().is_server_error() {
+            let error: SupermavenApiError = serde_json::from_slice(&body)?;
+            return Err(anyhow!("Supermaven API server error").context(error.message));
+        }
+
+        Ok(())
     }
 }
 
-pub async fn agent_binary_info(
+pub async fn latest_release(
     client: Arc<dyn HttpClient>,
     platform: &str,
     arch: &str,
@@ -155,22 +191,17 @@ pub async fn agent_binary_info(
     let mut body = Vec::new();
     response.body_mut().read_to_end(&mut body).await?;
 
-    let body_str = std::str::from_utf8(&body)?;
-    dbg!(body_str);
-
-    if response.status().is_client_error() {
+    if response.status().is_client_error() || response.status().is_server_error() {
+        let body_str = std::str::from_utf8(&body)?;
         let error: SupermavenApiError = serde_json::from_str(body_str)?;
         return Err(anyhow!("Supermaven API error: {}", error.message));
-    } else if response.status().is_server_error() {
-        let error: SupermavenApiError = serde_json::from_str(body_str)?;
-        return Err(anyhow!("Supermaven API server error").context(error.message));
     }
 
-    serde_json::from_str::<SupermavenDownloadResponse>(body_str)
+    serde_json::from_slice::<SupermavenDownloadResponse>(&body)
         .with_context(|| format!("Unable to parse Supermaven Agent response"))
 }
 
-pub fn download_binary(client: Arc<dyn HttpClient>) -> impl Future<Output = Result<PathBuf>> {
+pub fn download_latest(client: Arc<dyn HttpClient>) -> impl Future<Output = Result<PathBuf>> {
     async move {
         let platform = match std::env::consts::OS {
             "macos" => "darwin",
@@ -185,7 +216,7 @@ pub fn download_binary(client: Arc<dyn HttpClient>) -> impl Future<Output = Resu
             _ => return Err(anyhow!("unsupported architecture")),
         };
 
-        let download_info = agent_binary_info(client.clone(), platform, arch).await?;
+        let download_info = latest_release(client.clone(), platform, arch).await?;
         let request = HttpRequest::get(&download_info.download_url);
 
         let mut response = client

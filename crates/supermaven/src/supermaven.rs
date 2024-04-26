@@ -64,7 +64,7 @@ impl Supermaven {
         if let Self::Starting = self {
             cx.spawn(|cx| async move {
                 // todo!(): Don't download the most up to date binary every time, check to see if a recent is downloaded
-                let binary_path = supermaven_api::download_binary(client).await?;
+                let binary_path = supermaven_api::download_latest(client).await?;
 
                 let mut process = Command::new(&binary_path)
                     .arg("stdio")
