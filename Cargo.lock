@@ -9604,6 +9604,7 @@ dependencies = [
  "serde_json",
  "settings",
  "smol",
+ "supermaven_api",
  "theme",
  "ui",
  "util",
