@@ -9445,10 +9445,8 @@ async fn test_toggle_hunk_diff(executor: BackgroundExecutor, cx: &mut gpui::Test
         let snapshot = editor.snapshot(cx);
         let all_hunks = editor_hunks(editor, &snapshot, cx);
         let all_expanded_hunks = expanded_hunks(editor, &snapshot, cx);
-        let git_additions_background_highlights =
-            expanded_hunks_background_highlights(editor, &snapshot);
         assert_eq!(
-            git_additions_background_highlights,
+            expanded_hunks_background_highlights(editor, &snapshot),
             Vec::new(),
             "After cancelling in editor, no git highlights should be left"
         );
@@ -9559,9 +9557,8 @@ async fn test_toggled_diff_base_change(
         let snapshot = editor.snapshot(cx);
         let all_hunks = editor_hunks(editor, &snapshot, cx);
         let all_expanded_hunks = expanded_hunks(&editor, &snapshot, cx);
-        let git_additions_background_highlights = expanded_hunks_background_highlights(editor, &snapshot);
         assert_eq!(
-            git_additions_background_highlights,
+            expanded_hunks_background_highlights(editor, &snapshot),
             vec![9..11, 13..15],
             "After expanding, all git additions should be highlighted for Modified (split into added and removed) and Added hunks"
         );
@@ -9589,10 +9586,8 @@ async fn test_toggled_diff_base_change(
         let snapshot = editor.snapshot(cx);
         let all_hunks = editor_hunks(editor, &snapshot, cx);
         let all_expanded_hunks = expanded_hunks(editor, &snapshot, cx);
-        let git_additions_background_highlights =
-            expanded_hunks_background_highlights(editor, &snapshot);
         assert_eq!(
-            git_additions_background_highlights,
+            expanded_hunks_background_highlights(editor, &snapshot),
             Vec::new(),
             "After diff base is changed, old git highlights should be removed"
         );
@@ -9690,13 +9685,14 @@ async fn test_edits_around_toggled_additions(
         let snapshot = editor.snapshot(cx);
         let all_hunks = editor_hunks(editor, &snapshot, cx);
         let all_expanded_hunks = expanded_hunks(&editor, &snapshot, cx);
-        let git_additions_background_highlights =
-            expanded_hunks_background_highlights(editor, &snapshot);
         assert_eq!(
             all_hunks,
             vec![("".to_string(), DiffHunkStatus::Added, 4..7)]
         );
-        assert_eq!(git_additions_background_highlights, vec![4..7]);
+        assert_eq!(
+            expanded_hunks_background_highlights(editor, &snapshot),
+            vec![4..7]
+        );
         assert_eq!(all_hunks, all_expanded_hunks);
     });
 
@@ -9725,14 +9721,12 @@ async fn test_edits_around_toggled_additions(
         let snapshot = editor.snapshot(cx);
         let all_hunks = editor_hunks(editor, &snapshot, cx);
         let all_expanded_hunks = expanded_hunks(&editor, &snapshot, cx);
-        let git_additions_background_highlights =
-            expanded_hunks_background_highlights(editor, &snapshot);
         assert_eq!(
             all_hunks,
             vec![("".to_string(), DiffHunkStatus::Added, 4..8)]
         );
         assert_eq!(
-            git_additions_background_highlights,
+            expanded_hunks_background_highlights(editor, &snapshot),
             vec![4..8],
             "Edited hunk should have one more line added"
         );
@@ -9768,14 +9762,12 @@ async fn test_edits_around_toggled_additions(
         let snapshot = editor.snapshot(cx);
         let all_hunks = editor_hunks(editor, &snapshot, cx);
         let all_expanded_hunks = expanded_hunks(&editor, &snapshot, cx);
-        let git_additions_background_highlights =
-            expanded_hunks_background_highlights(editor, &snapshot);
         assert_eq!(
             all_hunks,
             vec![("".to_string(), DiffHunkStatus::Added, 4..9)]
         );
         assert_eq!(
-            git_additions_background_highlights,
+            expanded_hunks_background_highlights(editor, &snapshot),
             vec![4..9],
             "Edited hunk should have one more line added"
         );
@@ -9810,14 +9802,12 @@ async fn test_edits_around_toggled_additions(
         let snapshot = editor.snapshot(cx);
         let all_hunks = editor_hunks(editor, &snapshot, cx);
         let all_expanded_hunks = expanded_hunks(&editor, &snapshot, cx);
-        let git_additions_background_highlights =
-            expanded_hunks_background_highlights(editor, &snapshot);
         assert_eq!(
             all_hunks,
             vec![("".to_string(), DiffHunkStatus::Added, 4..8)]
         );
         assert_eq!(
-            git_additions_background_highlights,
+            expanded_hunks_background_highlights(editor, &snapshot),
             vec![4..8],
             "Deleting a line should shrint the hunk"
         );
@@ -9856,13 +9846,14 @@ async fn test_edits_around_toggled_additions(
         let snapshot = editor.snapshot(cx);
         let all_hunks = editor_hunks(editor, &snapshot, cx);
         let all_expanded_hunks = expanded_hunks(&editor, &snapshot, cx);
-        let git_additions_background_highlights =
-            expanded_hunks_background_highlights(editor, &snapshot);
         assert_eq!(
             all_hunks,
             vec![("".to_string(), DiffHunkStatus::Added, 5..6)]
         );
-        assert_eq!(git_additions_background_highlights, vec![5..6]);
+        assert_eq!(
+            expanded_hunks_background_highlights(editor, &snapshot),
+            vec![5..6]
+        );
         assert_eq!(all_hunks, all_expanded_hunks);
     });
 
@@ -9887,8 +9878,6 @@ async fn test_edits_around_toggled_additions(
         let snapshot = editor.snapshot(cx);
         let all_hunks = editor_hunks(editor, &snapshot, cx);
         let all_expanded_hunks = expanded_hunks(&editor, &snapshot, cx);
-        let git_additions_background_highlights =
-            expanded_hunks_background_highlights(editor, &snapshot);
         assert_eq!(
             all_hunks,
             vec![
@@ -9905,7 +9894,7 @@ async fn test_edits_around_toggled_additions(
             ]
         );
         assert_eq!(
-            git_additions_background_highlights,
+            expanded_hunks_background_highlights(editor, &snapshot),
             Vec::new(),
             "Should close all stale expanded addition hunks"
         );
