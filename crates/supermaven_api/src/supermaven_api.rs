@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Context, Result};
-use futures::AsyncReadExt;
+use futures::{AsyncReadExt, Future};
 use serde::{Deserialize, Serialize};
 use smol::fs::unix::PermissionsExt as _;
 use smol::fs::{self, File};
@@ -52,6 +52,7 @@ pub struct SupermavenAdminApi {
 // {"downloadUrl":"https://supermaven-public.s3.amazonaws.com/sm-agent/22/darwin/arm64/sm-agent","version":22,"sha256Hash":"3295027da01c41caefcd153f025241e2c9a4da038483baefd6729fa99e9feed7"}%
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SupermavenDownloadResponse {
     pub download_url: String,
     pub version: u64,
@@ -131,41 +132,63 @@ impl SupermavenAdminApi {
         serde_json::from_str::<CreateApiKeyResponse>(body_str)
             .with_context(|| format!("Unable to parse Supermaven API Key response"))
     }
+}
 
-    pub async fn agent_binary_info(
-        &self,
-        platform: String,
-        arch: String,
-    ) -> Result<SupermavenDownloadResponse> {
-        let uri = format!(
-            "https://supermaven.com/api/download-path?platform={}&arch={}",
-            platform, arch
-        );
+pub async fn agent_binary_info(
+    client: Arc<dyn HttpClient>,
+    platform: &str,
+    arch: &str,
+) -> Result<SupermavenDownloadResponse> {
+    let uri = format!(
+        "https://supermaven.com/api/download-path?platform={}&arch={}",
+        platform, arch
+    );
 
-        // Download is not authenticated
-        let request = HttpRequest::get(&uri);
+    // Download is not authenticated
+    let request = HttpRequest::get(&uri);
 
-        let mut response = self
-            .http_client
-            .send(request.body(AsyncBody::default())?)
-            .await
-            .with_context(|| format!("Unable to acquire Supermaven Agent"))?;
+    let mut response = client
+        .send(request.body(AsyncBody::default())?)
+        .await
+        .with_context(|| format!("Unable to acquire Supermaven Agent"))?;
 
-        let mut body = Vec::new();
-        response.body_mut().read_to_end(&mut body).await?;
+    let mut body = Vec::new();
+    response.body_mut().read_to_end(&mut body).await?;
 
-        let body_str = std::str::from_utf8(&body)?;
-        serde_json::from_str::<SupermavenDownloadResponse>(body_str)
-            .with_context(|| format!("Unable to parse Supermaven Agent response"))
+    let body_str = std::str::from_utf8(&body)?;
+    dbg!(body_str);
+
+    if response.status().is_client_error() {
+        let error: SupermavenApiError = serde_json::from_str(body_str)?;
+        return Err(anyhow!("Supermaven API error: {}", error.message));
+    } else if response.status().is_server_error() {
+        let error: SupermavenApiError = serde_json::from_str(body_str)?;
+        return Err(anyhow!("Supermaven API server error").context(error.message));
     }
 
-    pub async fn download_binary(&self, platform: String, arch: String) -> Result<PathBuf> {
-        let download_info = self.agent_binary_info(platform, arch).await?;
+    serde_json::from_str::<SupermavenDownloadResponse>(body_str)
+        .with_context(|| format!("Unable to parse Supermaven Agent response"))
+}
 
+pub fn download_binary(client: Arc<dyn HttpClient>) -> impl Future<Output = Result<PathBuf>> {
+    async move {
+        let platform = match std::env::consts::OS {
+            "macos" => "darwin",
+            "windows" => "windows",
+            "linux" => "linux",
+            _ => return Err(anyhow!("unsupported platform")),
+        };
+
+        let arch = match std::env::consts::ARCH {
+            "x86_64" => "amd64",
+            "aarch64" => "arm64",
+            _ => return Err(anyhow!("unsupported architecture")),
+        };
+
+        let download_info = agent_binary_info(client.clone(), platform, arch).await?;
         let request = HttpRequest::get(&download_info.download_url);
 
-        let mut response = self
-            .http_client
+        let mut response = client
             .send(request.body(AsyncBody::default())?)
             .await
             .with_context(|| format!("Unable to download Supermaven Agent"))?;
