@@ -9842,7 +9842,10 @@ async fn test_fold_unfold_diff(executor: BackgroundExecutor, cx: &mut gpui::Test
         );
     });
 
-    cx.update_editor(|editor, cx| editor.unfold_lines(&UnfoldLines, cx));
+    cx.update_editor(|editor, cx| {
+        editor.select_all(&SelectAll, cx);
+        editor.unfold_lines(&UnfoldLines, cx);
+    });
     cx.assert_editor_state(
         &r#"
         «use some::mod2;
@@ -9855,7 +9858,7 @@ async fn test_fold_unfold_diff(executor: BackgroundExecutor, cx: &mut gpui::Test
 
             println!("world");
             //
-            //ˇ»
+            //
         }
 
         fn another() {
@@ -9865,7 +9868,7 @@ async fn test_fold_unfold_diff(executor: BackgroundExecutor, cx: &mut gpui::Test
 
             println!("another2");
         }
-        "#
+        ˇ»"#
         .unindent(),
     );
     cx.update_editor(|editor, cx| {
@@ -9874,10 +9877,8 @@ async fn test_fold_unfold_diff(executor: BackgroundExecutor, cx: &mut gpui::Test
         let all_expanded_hunks = expanded_hunks(&editor, &snapshot, cx);
         assert_eq!(
             expanded_hunks_background_highlights(editor, &snapshot),
-            vec![15..16],
-            // TODO kb change this and allow to restore the folded hunks?
-            "The inly non-folded hunk should be shifted down by the unfold and keep its highlights. \
-            Folded hunks do not get restored after unfold."
+            vec![9..11, 13..15, 19..20],
+            "After unfolding, all hunk diffs should be visible again"
         );
         assert_eq!(
             all_hunks,
@@ -9885,40 +9886,28 @@ async fn test_fold_unfold_diff(executor: BackgroundExecutor, cx: &mut gpui::Test
                 (
                     "use some::mod1;\n".to_string(),
                     DiffHunkStatus::Removed,
-                    0..0
+                    1..1
                 ),
                 (
                     "const B: u32 = 42;\n".to_string(),
                     DiffHunkStatus::Removed,
-                    3..3
+                    5..5
                 ),
                 (
                     "fn main(ˇ) {\n    println!(\"hello\");\n".to_string(),
                     DiffHunkStatus::Modified,
-                    5..7
+                    9..11
                 ),
-                ("".to_string(), DiffHunkStatus::Added, 9..11),
-                ("".to_string(), DiffHunkStatus::Added, 15..16),
+                ("".to_string(), DiffHunkStatus::Added, 13..15),
+                ("".to_string(), DiffHunkStatus::Added, 19..20),
                 (
                     "fn another2() {\n".to_string(),
                     DiffHunkStatus::Removed,
-                    19..19
+                    23..23
                 ),
             ],
-            "Hunk list should keep all diff hunks, shifted back due to unfold and hidden diff expands"
         );
-        assert_eq!(
-            all_expanded_hunks,
-            vec![
-                ("".to_string(), DiffHunkStatus::Added, 15..16),
-                (
-                    "fn another2() {\n".to_string(),
-                    DiffHunkStatus::Removed,
-                    19..19
-                ),
-            ],
-            "Only non-folded hunks should be left expanded after unfold"
-        );
+        assert_eq!(all_hunks, all_expanded_hunks);
     });
 }
 
