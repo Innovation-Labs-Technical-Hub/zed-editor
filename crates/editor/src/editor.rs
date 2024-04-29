@@ -824,6 +824,7 @@ impl CompletionsMenu {
     }
 
     fn pre_resolve_completion_documentation(
+        buffer: Model<Buffer>,
         completions: Arc<RwLock<Box<[Completion]>>>,
         matches: Arc<[StringMatch]>,
         editor: &Editor,
@@ -839,6 +840,7 @@ impl CompletionsMenu {
         };
 
         let resolve_task = provider.resolve_completions(
+            buffer,
             matches.iter().map(|m| m.candidate_id).collect(),
             completions.clone(),
             cx,
@@ -867,7 +869,12 @@ impl CompletionsMenu {
         };
 
         let resolve_task = project.update(cx, |project, cx| {
-            project.resolve_completions(vec![completion_index], self.completions.clone(), cx)
+            project.resolve_completions(
+                self.buffer.clone(),
+                vec![completion_index],
+                self.completions.clone(),
+                cx,
+            )
         });
 
         let delay_ms =
@@ -3426,7 +3433,7 @@ impl Editor {
                                 )
                             })
                             .collect(),
-                        buffer,
+                        buffer: buffer.clone(),
                         completions: Arc::new(RwLock::new(completions.into())),
                         matches: Vec::new().into(),
                         selected_item: 0,
@@ -3453,6 +3460,7 @@ impl Editor {
                                 .completion_documentation_pre_resolve_debounce
                                 .fire_new(delay, cx, |editor, cx| {
                                     CompletionsMenu::pre_resolve_completion_documentation(
+                                        buffer,
                                         completions,
                                         matches,
                                         editor,
@@ -10072,6 +10080,7 @@ pub trait CompletionProvider {
 
     fn resolve_completions(
         &self,
+        buffer: Model<Buffer>,
         completion_indices: Vec<usize>,
         completions: Arc<RwLock<Box<[Completion]>>>,
         cx: &mut ViewContext<Editor>,
@@ -10100,12 +10109,13 @@ impl CompletionProvider for Model<Project> {
 
     fn resolve_completions(
         &self,
+        buffer: Model<Buffer>,
         completion_indices: Vec<usize>,
         completions: Arc<RwLock<Box<[Completion]>>>,
         cx: &mut ViewContext<Editor>,
     ) -> Task<Result<bool>> {
         self.update(cx, |project, cx| {
-            project.resolve_completions(completion_indices, completions, cx)
+            project.resolve_completions(buffer, completion_indices, completions, cx)
         })
     }
 
